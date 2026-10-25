@@ -137,6 +137,8 @@ def detect(conn: sqlite3.Connection, cfg: Config, fixture: sqlite3.Row, snaps: l
             for oid, s in outs.items():
                 if oid not in fair_by_outcome or not s.active:
                     continue
+                if not is_ex and s.age_s is not None and s.age_s > cfg.soft_max_age_s:
+                    continue  # cuota vieja en la API: probablemente ya no existe en la web
                 pnet = net_price(s.price, cfg.exchange_commission) if is_ex else s.price
                 if s.price < cfg.odds_min or s.price > odds_max:
                     continue

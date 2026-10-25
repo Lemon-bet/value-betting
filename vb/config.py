@@ -31,7 +31,7 @@ class Config:
     exchange_bookmaker: str = field(default_factory=lambda: _env("VB_EXCHANGE", "betfair-ex"))
     exchange_commission: float = field(default_factory=lambda: float(_env("VB_EXCHANGE_COMMISSION", "0.05")))
     soft_bookmakers: list[str] = field(
-        default_factory=lambda: _env_list("VB_SOFT_BOOKMAKERS", "bet365.es,paf.es,leovegas.es,pokerstars.es")
+        default_factory=lambda: _env_list("VB_SOFT_BOOKMAKERS", "bet365.es,paf.es,leovegas.es")
     )
 
     # --- Competiciones (ids de OddsPapi; fútbol = sportId 10) ---
@@ -56,6 +56,8 @@ class Config:
     odds_max_2way: float = 3.50
     odds_max_1x2: float = 4.50
     ref_max_age_s: int = field(default_factory=lambda: int(_env("VB_REF_MAX_AGE_S", "210")))  # 180 s + 30 s de retardo
+    # cuota de casa sin cambiar en la API durante más de esto → se descarta (caso pokerstars.es 25-oct: 28 h, falsa)
+    soft_max_age_s: int = field(default_factory=lambda: int(_env("VB_SOFT_MAX_AGE_S", "21600")))
     ref_move_threshold: float = 0.03  # Pinnacle movió >3 % desde el barrido anterior → esperar
     shin_power_max_diff: float = 0.005  # discrepancia máxima entre Shin y power (puntos de probabilidad)
     min_minutes_before_kickoff: int = 5

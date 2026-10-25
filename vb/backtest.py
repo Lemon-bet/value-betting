@@ -141,6 +141,8 @@ def simulate_fixture(cfg: Config, markets: dict[int, dict], fixture: dict, ref: 
                     if not cur:
                         continue
                     price = cur[1]
+                    if not is_ex and (t - cur[0]).total_seconds() > cfg.soft_max_age_s:
+                        continue
                     pnet = net_price(price, cfg.exchange_commission) if is_ex else price
                     if price < cfg.odds_min or price > odds_max:
                         continue
