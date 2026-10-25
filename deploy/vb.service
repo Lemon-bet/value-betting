@@ -1,0 +1,16 @@
+[Unit]
+Description=vb - recolector y detector de value betting
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vb
+WorkingDirectory=/opt/vb
+ExecStart=/opt/vb/.venv/bin/python -m vb run
+Restart=always
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
