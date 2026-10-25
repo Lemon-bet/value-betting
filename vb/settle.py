@@ -107,16 +107,36 @@ def compute_clv(conn: sqlite3.Connection, cfg: Config, fixture_id: str) -> int:
 
 # ---------------------------------------------------------------- resultados
 def final_score(scores: dict) -> tuple[int, int] | None:
-    """Heurística sobre /scores: toma el periodo con mayor suma (tiempo completo si los periodos son acumulados);
-    si hay varios periodos no acumulados, suma los periodos 1..n. Se guarda el JSON crudo para revisar."""
-    per = (scores or {}).get("scores") or {}
-    if not per:
+    """Marcador a 90 minutos (sin prórroga), que es como se liquidan 1X2, totales y hándicaps.
+
+    Formato real de OddsPapi (25-oct-2026):
+      {"fixtureId": ..., "scores": {"periods": {"result": {...}, "fulltime": {...}, "p1": {...}, "p2": {...}, ...}}}
+    Prioridad: p1 + p2 (90 min) > "fulltime" > "result". Se mantiene el formato antiguo por periodos numéricos.
+    """
+    sc = (scores or {}).get("scores") or {}
+    per = sc.get("periods") if isinstance(sc, dict) and isinstance(sc.get("periods"), dict) else None
+
+    def pair(d):
+        try:
+            return int(d["participant1Score"]), int(d["participant2Score"])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    if per is not None:
+        p1, p2 = pair(per.get("p1") or {}), pair(per.get("p2") or {})
+        if p1 and p2:
+            return p1[0] + p2[0], p1[1] + p2[1]
+        for k in ("fulltime", "ft", "regular", "result"):
+            v = pair(per.get(k) or {})
+            if v:
+                return v
         return None
+    # formato antiguo: {"scores": {"0": {...}, "1": {...}}}
     items = []
-    for k, v in per.items():
+    for k, v in (sc or {}).items():
         try:
             items.append((int(k), int(v.get("participant1Score")), int(v.get("participant2Score"))))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, AttributeError):
             continue
     if not items:
         return None
@@ -124,13 +144,9 @@ def final_score(scores: dict) -> tuple[int, int] | None:
     if any(k == 0 for k, _, _ in items):
         _, h, a = next(x for x in items if x[0] == 0)
         others = [(hh, aa) for k, hh, aa in items if k != 0]
-        # si el periodo 0 es >= a cualquier otro en ambos marcadores, es el total
         if all(h >= hh and a >= aa for hh, aa in others):
             return h, a
-    # suma de periodos distintos de 0
-    hs = sum(hh for k, hh, _ in items if k != 0)
-    as_ = sum(aa for k, _, aa in items if k != 0)
-    return hs, as_
+    return sum(hh for k, hh, _ in items if k != 0), sum(aa for k, _, aa in items if k != 0)
 
 
 def outcome_result(market_type: str, outcome_id: int, handicap: float | None, outcomes: list[dict],

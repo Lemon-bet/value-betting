@@ -200,6 +200,15 @@ class SettleTests(unittest.TestCase):
         self.assertEqual(final_score({"scores": {"1": {"participant1Score": 1, "participant2Score": 0},
                                                  "2": {"participant1Score": 1, "participant2Score": 1}}}), (2, 1))
         self.assertIsNone(final_score({}))
+        real = {"fixtureId": "x", "scores": {"periods": {
+            "result": {"participant1Score": 0, "participant2Score": 0},
+            "p1": {"participant1Score": 0, "participant2Score": 0},
+            "p2": {"participant1Score": 0, "participant2Score": 0}}}}
+        self.assertEqual(final_score(real), (0, 0))
+        et = {"scores": {"periods": {"result": {"participant1Score": 2, "participant2Score": 1},
+                                     "p1": {"participant1Score": 1, "participant2Score": 0},
+                                     "p2": {"participant1Score": 0, "participant2Score": 1}}}}
+        self.assertEqual(final_score(et), (1, 1))  # 90 min, sin prórroga
 
 
 if __name__ == "__main__":
