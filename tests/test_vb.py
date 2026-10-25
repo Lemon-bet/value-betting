@@ -148,7 +148,7 @@ class DetectorTests(unittest.TestCase):
         fx = next(f for f in self.fixtures if "betfair-ex" in f["bookmakerOdds"])
         start = datetime.fromisoformat(fx["startTime"].replace("Z", "+00:00"))
         now = start - timedelta(minutes=60)
-        old = (now - timedelta(minutes=20)).isoformat()
+        old = (now - timedelta(hours=7)).isoformat()
         fx2 = fake_ref_from_exchange(fx, self.cfg.ref_bookmaker, old)
         b = fx2["bookmakerOdds"]["bet365.es"]["markets"]["101"]["outcomes"]["103"]["players"]["0"]
         b["price"] = round(b["price"] * 1.2, 2)

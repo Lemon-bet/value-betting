@@ -55,7 +55,9 @@ class Config:
     odds_min: float = 1.30
     odds_max_2way: float = 3.50
     odds_max_1x2: float = 4.50
-    ref_max_age_s: int = field(default_factory=lambda: int(_env("VB_REF_MAX_AGE_S", "210")))  # 180 s + 30 s de retardo
+    # Edad desde el ÚLTIMO CAMBIO de la cuota de Pinnacle (no frescura del dato: pinnacle+30 llega con ≤30 s de retraso).
+    # Antes 210 s: bloqueaba casi todo porque Pinnacle pasa largos ratos sin moverse (fallo detectado 26-oct). Ahora 6 h.
+    ref_max_age_s: int = field(default_factory=lambda: int(_env("VB_REF_MAX_AGE_S", "21600")))
     # cuota de casa sin cambiar en la API durante más de esto → se descarta (caso pokerstars.es 25-oct: 28 h, falsa)
     soft_max_age_s: int = field(default_factory=lambda: int(_env("VB_SOFT_MAX_AGE_S", "21600")))
     # límite mínimo (USD) que Pinnacle acepta en esa línea; descarta líneas alternativas poco fiables. 0 = sin filtro
