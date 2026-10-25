@@ -176,9 +176,15 @@ def pnl_units(result: str, price: float, stake: float) -> float:
 def settle_fixture(api: OddsPapi, conn: sqlite3.Connection, fixture: sqlite3.Row) -> int:
     fid = fixture["fixture_id"]
     sc = api.scores(fid)
+    try:
+        conn.execute("INSERT INTO kv(k, v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+                     (f"scores_raw:{fid}", json.dumps(sc)[:4000]))
+        conn.commit()
+    except Exception:  # noqa: BLE001
+        pass
     fs = final_score(sc)
     if not fs:
-        log.info("sin resultado aún para %s", fid)
+        log.info("sin resultado aún para %s: %s", fid, json.dumps(sc)[:300])
         return 0
     home, away = fs
     conn.execute("UPDATE fixtures SET home_score=?, away_score=?, stage='settled', settled_at=? WHERE fixture_id=?",

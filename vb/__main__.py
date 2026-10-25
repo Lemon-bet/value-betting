@@ -57,6 +57,11 @@ def setup_logging(path: str) -> None:
 
 
 def main(argv: list[str]) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            pass
     load_dotenv()
     cfg = Config()
     setup_logging(cfg.log_path)

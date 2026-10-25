@@ -197,17 +197,26 @@ def post_match(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets: di
                          (now.isoformat(), f["fixture_id"]))
             conn.commit()
     # 3) liquidar (cuesta 1 consulta) solo partidos con señales, 3 h después del inicio
+    # cada partido: como mucho 1 intento cada 30 min y 8 intentos en total (luego queda para liquidar a mano)
     rows = conn.execute(
         """SELECT f.* FROM fixtures f WHERE f.stage='closed' AND f.settled_at IS NULL AND f.start_time < ?
+           AND (f.last_settle_at IS NULL OR f.last_settle_at < ?)
            AND EXISTS (SELECT 1 FROM signals s WHERE s.fixture_id=f.fixture_id)""",
-        ((now - timedelta(hours=3)).isoformat(),),
+        ((now - timedelta(hours=3)).isoformat(), (now - timedelta(minutes=30)).isoformat()),
     ).fetchall()
-    for f in rows[:10]:
+    for f in rows[:5]:
+        conn.execute("UPDATE fixtures SET last_settle_at=?, settle_attempts=COALESCE(settle_attempts,0)+1 WHERE fixture_id=?",
+                     (now.isoformat(), f["fixture_id"]))
+        conn.commit()
         try:
-            settle_fixture(api, conn, f)
+            n = settle_fixture(api, conn, f)
         except (ApiError, QuotaExhausted) as e:
             log.warning("liquidación %s: %s", f["fixture_id"], e)
-            break
+            n = 0
+        if not n and (f["settle_attempts"] or 0) + 1 >= 8:
+            conn.execute("UPDATE fixtures SET stage='unsettled' WHERE fixture_id=?", (f["fixture_id"],))
+            conn.commit()
+            log.warning("liquidación %s: sin resultado tras 8 intentos; liquidar a mano con `vb settle`", f["fixture_id"])
     # partidos cerrados sin señales: nada que liquidar
     conn.execute(
         """UPDATE fixtures SET stage='settled', settled_at=? WHERE stage='closed' AND start_time < ?

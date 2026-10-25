@@ -168,6 +168,11 @@ def connect(path: str) -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     # migraciones ligeras
     cols = {r[1] for r in conn.execute("PRAGMA table_info(signals)").fetchall()}
+    fcols = {r[1] for r in conn.execute("PRAGMA table_info(fixtures)").fetchall()}
+    for c, t in (("settle_attempts", "INTEGER DEFAULT 0"), ("last_settle_at", "TEXT")):
+        if c not in fcols:
+            conn.execute(f"ALTER TABLE fixtures ADD COLUMN {c} {t}")
+            conn.commit()
     if "ref_limit" not in cols:
         conn.execute("ALTER TABLE signals ADD COLUMN ref_limit REAL")
         conn.commit()
