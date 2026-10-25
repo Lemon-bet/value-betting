@@ -126,6 +126,38 @@ def main(argv: list[str]) -> int:
         print(run_backtest(api, conn, cfg, markets, args[0], args[1], mx))
         return 0
 
+    if cmd == "probe-history":
+        # Un partido por mes y competición: ¿hay histórico de la referencia y de una casa? (0 cuota salvo /fixtures)
+        cfg.validate()
+        from collections import defaultdict
+        from .api import ApiError
+        d_from = args[0] if args else "2026-01-01"
+        d_to = args[1] if len(args) > 1 else "2026-10-24"
+        for tid in cfg.tournament_ids:
+            try:
+                fx = api.fixtures(tid, d_from, d_to)
+            except ApiError as e:
+                print(f"competición {tid}: {e}")
+                continue
+            by_month = defaultdict(list)
+            for f in fx:
+                if f.get("startTime"):
+                    by_month[f["startTime"][:7]].append(f)
+            print(f"== competición {tid}: {len(fx)} partidos")
+            for m in sorted(by_month):
+                f = by_month[m][len(by_month[m]) // 2]
+                res = []
+                for bk in (cfg.ref_bookmaker, cfg.soft_bookmakers[0]):
+                    try:
+                        h = api.historical(f["fixtureId"], [bk])
+                        mk = ((h.get("bookmakers") or {}).get(bk) or {}).get("markets") or {}
+                        n = sum(len((o.get("players") or {}).get("0") or []) for mm in mk.values() for o in (mm.get("outcomes") or {}).values())
+                        res.append(f"{bk}: {n} cambios")
+                    except ApiError as e:
+                        res.append(f"{bk}: {e.code}")
+                print(f"  {m} ({len(by_month[m])} partidos) {f['startTime'][:10]} -> " + " | ".join(res))
+        return 0
+
     if cmd == "bt-report":
         from .report import report
         print(report(conn, "bt_signals"))

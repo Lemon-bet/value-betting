@@ -189,10 +189,15 @@ def run_backtest(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets: 
                 continue
             todo.append({"fixture_id": f["fixtureId"], "tournament_id": f.get("tournamentId"),
                          "start_time": f["startTime"], "home": f.get("participant1Name"), "away": f.get("participant2Name")})
+    todo.sort(key=lambda f: f["start_time"], reverse=True)  # lo más reciente primero
     todo = todo[:max_fixtures]
-    log.info("backtest: %d partidos por descargar", len(todo))
+    log.info("backtest: %d partidos por descargar (de más reciente a más antiguo)", len(todo))
     n_sig = 0
+    misses = 0
     for i, f in enumerate(todo, 1):
+        if misses >= 15:
+            log.info("backtest: 15 partidos seguidos sin histórico; se para aquí (fin de la retención)")
+            break
         try:
             h_ref = api.historical(f["fixture_id"], [cfg.ref_bookmaker])
             ref = _book_series(h_ref, cfg.ref_bookmaker, markets)
@@ -224,7 +229,9 @@ def run_backtest(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets: 
                          (f["fixture_id"], f["tournament_id"], f["start_time"], f["home"], f["away"],
                           datetime.now(timezone.utc).isoformat(), 0, str(e)[:200]))
             conn.commit()
+            misses += 1
             continue
+        misses = 0
         sigs = simulate_fixture(cfg, markets, f, ref, bseries) if ref else []
         for s in sigs:
             conn.execute(
