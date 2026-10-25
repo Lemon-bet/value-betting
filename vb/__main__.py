@@ -122,8 +122,10 @@ def main(argv: list[str]) -> int:
             print("uso: backtest FROM TO [max_partidos]")
             return 1
         markets = load_markets(conn) or (refresh_markets(api, conn, cfg.sport_id) and load_markets(conn))
+        fresh = "--fresh" in args
+        args = [a for a in args if a != "--fresh"]
         mx = int(args[2]) if len(args) > 2 else 400
-        print(run_backtest(api, conn, cfg, markets, args[0], args[1], mx))
+        print(run_backtest(api, conn, cfg, markets, args[0], args[1], mx, fresh=fresh))
         return 0
 
     if cmd == "probe-history":

@@ -51,6 +51,17 @@ def report(conn: sqlite3.Connection, table: str = "signals", min_n: int = 20) ->
     cut("rango de cuota", lambda r: _bucket(r["price"], [1.5, 2.0, 2.5, 3.0, 4.0]))
     cut("EV", lambda r: _bucket(r["ev"] * 100, [3, 4, 5, 7, 10]))
     if table == "bt_signals":
+        keys = rows[0].keys()
+        if "ref_limit" in keys:
+            cut("límite Pinnacle (USD)", lambda r: _bucket(r["ref_limit"], [500, 1000, 2000, 5000, 10000]))
+            for lim in (1000, 2000, 5000):
+                sub = [r for r in rows if r["ref_limit"] is not None and r["ref_limit"] >= lim]
+                out.append(f"\n-- solo límite Pinnacle ≥ {lim}: {_fmt(_stats(sub))}")
+                g: dict[str, list] = {}
+                for r in sub:
+                    g.setdefault(f"{r['bookmaker']} · {r['market_type']}", []).append(r)
+                for k, v in sorted(g.items(), key=lambda kv: -len(kv[1])):
+                    out.append(f"     {k:<26} {_fmt(_stats(v))}")
         cut("disparo", lambda r: r["trigger"])
         cut("disponible (min)", lambda r: _bucket(r["available_min"], [1, 3, 5, 10, 30]))
     else:

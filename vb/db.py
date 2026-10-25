@@ -166,6 +166,11 @@ def connect(path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(path, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    # migraciones ligeras
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(signals)").fetchall()}
+    if "ref_limit" not in cols:
+        conn.execute("ALTER TABLE signals ADD COLUMN ref_limit REAL")
+        conn.commit()
     return conn
 
 

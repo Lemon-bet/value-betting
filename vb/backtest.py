@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS bt_signals (
     minutes_to_kickoff REAL, bookmaker TEXT, market_id INTEGER, market_type TEXT, handicap REAL,
     outcome_id INTEGER, outcome_label TEXT, price REAL, price_net REAL, fair_prob REAL, fair_odds REAL,
     ev REAL, ref_price REAL, ref_age_s INTEGER, trigger TEXT, devig_method TEXT,
-    available_min REAL, closing_ref_price REAL, closing_fair_odds REAL, clv REAL
+    available_min REAL, closing_ref_price REAL, closing_fair_odds REAL, clv REAL,
+    ref_limit REAL, soft_age_s INTEGER
 );
 CREATE INDEX IF NOT EXISTS ix_bt_signals_fx ON bt_signals(fixture_id);
 """
@@ -49,6 +50,19 @@ class Series:
     def __init__(self, entries: list[dict]):
         self.pts = _series(entries)
         self.ts = [t for t, _ in self.pts]
+        lim = []
+        for e in entries or []:
+            ts = parse_ts(e.get("createdAt"))
+            if ts and e.get("price"):
+                lim.append((ts, e.get("limit")))
+        lim.sort(key=lambda x: x[0])
+        self.lims = [l for _, l in lim]
+
+    def limit_at(self, t: datetime) -> float | None:
+        i = bisect_right(self.ts, t) - 1
+        if i < 0 or i >= len(self.lims):
+            return None
+        return self.lims[i]
 
     def at(self, t: datetime) -> tuple[datetime, float] | None:
         i = bisect_right(self.ts, t) - 1
@@ -128,6 +142,10 @@ def simulate_fixture(cfg: Config, markets: dict[int, dict], fixture: dict, ref: 
                 if any(r is None for r in refp):
                     continue
                 ref_age = max(int((t - r[0]).total_seconds()) for r in refp)
+                lims = [ref_outs[o].limit_at(t) for o in oids]
+                ref_limit = min(l for l in lims if l is not None) if any(l is not None for l in lims) else None
+                if cfg.ref_min_limit and (ref_limit is None or ref_limit < cfg.ref_min_limit):
+                    continue
                 if any(ref_outs[o].changed_within(t, 600, cfg.ref_move_threshold) for o in oids):
                     continue  # referencia en movimiento
                 fr = fair_probs([r[1] for r in refp], cfg.shin_power_max_diff)
@@ -163,7 +181,8 @@ def simulate_fixture(cfg: Config, markets: dict[int, dict], fixture: dict, ref: 
                         "market_id": mid, "market_type": mk.get("market_type"), "handicap": mk.get("handicap"),
                         "outcome_id": o, "outcome_label": outcome_label(mk.get("market_type", ""), o, mk.get("outcomes"), mk.get("handicap")),
                         "price": price, "price_net": pnet, "fair_prob": fair[o], "fair_odds": 1.0 / fair[o], "ev": e,
-                        "ref_price": dict(zip(oids, refp))[o][1], "ref_age_s": ref_age,
+                        "ref_price": dict(zip(oids, refp))[o][1], "ref_age_s": ref_age, "ref_limit": ref_limit,
+                        "soft_age_s": int((t - cur[0]).total_seconds()),
                         "trigger": "ref" if any(abs((t - timedelta(seconds=30) - rt).total_seconds()) < 1 for rt in ref_outs[o].ts) else "book",
                         "devig_method": fr.method, "available_min": avail,
                         "closing_ref_price": dict(zip(oids, closing))[o][1], "closing_fair_odds": cf,
@@ -173,7 +192,15 @@ def simulate_fixture(cfg: Config, markets: dict[int, dict], fixture: dict, ref: 
 
 
 def run_backtest(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets: dict[int, dict],
-                 date_from: str, date_to: str, max_fixtures: int = 400) -> dict:
+                 date_from: str, date_to: str, max_fixtures: int = 400, fresh: bool = False) -> dict:
+    if fresh:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
+        for tbl in ("bt_fixtures", "bt_signals"):
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (tbl,)).fetchone():
+                conn.execute(f"ALTER TABLE {tbl} RENAME TO {tbl}_{stamp}")
+        conn.execute("DROP INDEX IF EXISTS ix_bt_signals_fx")
+        conn.commit()
+        log.info("backtest nuevo: tablas anteriores archivadas con sufijo _%s", stamp)
     conn.executescript(BT_SCHEMA)
     books = [cfg.exchange_bookmaker, *cfg.soft_bookmakers]
     done = {r[0] for r in conn.execute("SELECT fixture_id FROM bt_fixtures").fetchall()}
@@ -239,10 +266,10 @@ def run_backtest(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets: 
             conn.execute(
                 """INSERT INTO bt_signals(fixture_id, tournament_id, start_time, at, minutes_to_kickoff, bookmaker, market_id,
                    market_type, handicap, outcome_id, outcome_label, price, price_net, fair_prob, fair_odds, ev, ref_price,
-                   ref_age_s, trigger, devig_method, available_min, closing_ref_price, closing_fair_odds, clv)
+                   ref_age_s, trigger, devig_method, available_min, closing_ref_price, closing_fair_odds, clv, ref_limit, soft_age_s)
                    VALUES (:fixture_id,:tournament_id,:start_time,:at,:minutes_to_kickoff,:bookmaker,:market_id,:market_type,
                    :handicap,:outcome_id,:outcome_label,:price,:price_net,:fair_prob,:fair_odds,:ev,:ref_price,:ref_age_s,
-                   :trigger,:devig_method,:available_min,:closing_ref_price,:closing_fair_odds,:clv)""", s)
+                   :trigger,:devig_method,:available_min,:closing_ref_price,:closing_fair_odds,:clv,:ref_limit,:soft_age_s)""", s)
         conn.execute("INSERT OR REPLACE INTO bt_fixtures VALUES (?,?,?,?,?,?,?,?)",
                      (f["fixture_id"], f["tournament_id"], f["start_time"], f["home"], f["away"],
                       datetime.now(timezone.utc).isoformat(), len(bseries) + (1 if ref else 0), None))

@@ -45,6 +45,7 @@ class Signal:
     minutes_to_kickoff: float
     devig_method: str
     note: str = ""
+    ref_limit: float | None = None
 
 
 def _group(snaps: list[Snap]) -> dict[tuple[str, int], dict[int, Snap]]:
@@ -121,6 +122,10 @@ def detect(conn: sqlite3.Connection, cfg: Config, fixture: sqlite3.Row, snaps: l
         if moving:
             log.info("ref en movimiento %s mid=%s; se espera", fixture["fixture_id"], mid)
             continue
+        lims = [s.stake_limit for s in ref_list if s.stake_limit is not None]
+        ref_limit = min(lims) if lims else None
+        if cfg.ref_min_limit and (ref_limit is None or ref_limit < cfg.ref_min_limit):
+            continue
         fr = fair_probs([s.price for s in ref_list], cfg.shin_power_max_diff)
         if not fr.ok:
             log.info("ref descartada %s mid=%s: %s", fixture["fixture_id"], mid, fr.note)
@@ -159,7 +164,7 @@ def detect(conn: sqlite3.Connection, cfg: Config, fixture: sqlite3.Row, snaps: l
                     fair_odds=1.0 / fair_by_outcome[oid], ev=e, ref_price=ref_s.price,
                     ref_changed_at=ref_s.changed_at, ref_age_s=ref_s.age_s,
                     soft_changed_at=s.changed_at, soft_age_s=s.age_s,
-                    minutes_to_kickoff=mins_to_ko, devig_method=fr.method, note=note,
+                    minutes_to_kickoff=mins_to_ko, devig_method=fr.method, note=note, ref_limit=ref_limit,
                 ))
     return signals
 
@@ -169,12 +174,13 @@ def store_signal(conn: sqlite3.Connection, cfg: Config, sig: Signal, sweep_id: i
     cur = conn.execute(
         """INSERT INTO signals(created_at, sweep_id, fixture_id, bookmaker, market_id, market_type, handicap,
              outcome_id, outcome_label, price, price_net, fair_prob, fair_odds, ev, ref_price, ref_changed_at,
-             ref_age_s, soft_changed_at, soft_age_s, minutes_to_kickoff, devig_method, status, note)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+             ref_age_s, soft_changed_at, soft_age_s, minutes_to_kickoff, devig_method, status, note, ref_limit)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (datetime.now(timezone.utc).isoformat(), sweep_id, sig.fixture_id, sig.bookmaker, sig.market_id,
          sig.market_type, sig.handicap, sig.outcome_id, sig.outcome_label, sig.price, sig.price_net,
          sig.fair_prob, sig.fair_odds, sig.ev, sig.ref_price, sig.ref_changed_at, sig.ref_age_s,
-         sig.soft_changed_at, sig.soft_age_s, sig.minutes_to_kickoff, sig.devig_method, status, sig.note),
+         sig.soft_changed_at, sig.soft_age_s, sig.minutes_to_kickoff, sig.devig_method, status, sig.note,
+         sig.ref_limit),
     )
     sid = int(cur.lastrowid)
     if status == "paper":
