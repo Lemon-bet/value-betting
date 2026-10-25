@@ -36,7 +36,7 @@ def main(db_path: str = "data/bt_local.sqlite"):
     conn = connect(db_path)
     conn.executescript(BT_SCHEMA)
     total = 0
-    for path in sorted(glob.glob("data/bt/slim_*.json")):
+    for path in sorted(glob.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), "bt_data", "slim_*.json"))):
         for f in json.load(open(path)):
             hist = to_hist(f["books"])
             ref = _book_series(hist, cfg.ref_bookmaker, markets)

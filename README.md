@@ -28,14 +28,14 @@ Carpeta propia `C:\OTRO\vb`, con su propio entorno virtual: no toca el Python ni
 Consumo: un proceso Python que duerme casi todo el tiempo; unos pocos MB de RAM y red solo en los barridos
 (unos minutos antes de cada partido). No usa el bróker ni Claude.
 
-1. Descomprimir el zip en cualquier carpeta (por ejemplo `C:\OTRO\vb-src`).
+1. Clonar el repositorio: `git clone https://github.com/Lemon-bet/value-betting C:\OTRO\vb`
 2. PowerShell **como administrador**:
    ```powershell
-   cd C:\OTRO\vb-src\vb
+   cd C:\OTRO\vb
    powershell -ExecutionPolicy Bypass -File deploy\install_windows.ps1
    ```
-   Copia a `C:\OTRO\vb`, crea `.venv`, instala `requests`, registra la tarea **VB Collector** (arranca con el
-   sistema, se reinicia sola si falla) y **VB Backup** (copia diaria de la BD a las 05:00).
+   Crea `.venv`, instala `requests`, registra la tarea **VB Collector** (arranca con el sistema, se reinicia
+   sola si falla) y **VB Backup** (copia diaria de la BD a las 05:00). Actualizar: `git pull` y reiniciar la tarea.
 3. Editar `C:\OTRO\vb\.env`: pegar `ODDSPAPI_KEY` y, si se quiere, el bot de Telegram.
 4. Comprobar y arrancar:
    ```powershell

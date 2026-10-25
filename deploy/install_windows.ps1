@@ -1,13 +1,17 @@
 # Instala vb en Windows en C:\OTRO\vb y lo registra como tarea programada que arranca con el sistema.
-# Ejecutar en PowerShell como administrador, desde la carpeta donde está descomprimido el zip:
-#   powershell -ExecutionPolicy Bypass -File deploy\install_windows.ps1
+# Ejecutar en PowerShell como administrador desde el clon del repositorio (git clone ... C:\OTRO\vb):
+#   cd C:\OTRO\vb; powershell -ExecutionPolicy Bypass -File deploy\install_windows.ps1
 $ErrorActionPreference = "Stop"
 $Root = "C:\OTRO\vb"
 $Src  = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
-Write-Host "== Copiando a $Root"
-New-Item -ItemType Directory -Force -Path $Root | Out-Null
-robocopy $Src $Root /E /XD .venv data __pycache__ /XF *.pyc /NFL /NDL /NJH /NJS | Out-Null
+if ($Src -ne $Root) {
+    Write-Host "== Copiando a $Root"
+    New-Item -ItemType Directory -Force -Path $Root | Out-Null
+    robocopy $Src $Root /E /XD .venv data __pycache__ .git /XF *.pyc /NFL /NDL /NJH /NJS | Out-Null
+} else {
+    Write-Host "== Instalando en el propio clon $Root"
+}
 New-Item -ItemType Directory -Force -Path "$Root\data" | Out-Null
 
 Write-Host "== Entorno virtual propio (no toca el Python de MAREA)"
