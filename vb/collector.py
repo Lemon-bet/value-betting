@@ -140,7 +140,11 @@ def sweep(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets: dict[in
         for sig in sigs:
             sid = store_signal(conn, cfg, sig, sweep_id)
             n_sig += 1
-            text = format_signal(sig, f, sid, cfg.paper_stake_units, sig.bookmaker == cfg.exchange_bookmaker)
+            is_ex = sig.bookmaker == cfg.exchange_bookmaker
+            if sig.market_type in cfg.no_alert_market_types or (is_ex and not cfg.exchange_alerts):
+                conn.execute("UPDATE signals SET note=COALESCE(note,'') || ' [sin aviso]' WHERE id=?", (sid,))
+                continue
+            text = format_signal(sig, f, sid, cfg.paper_stake_units, is_ex)
             if tg.send(text):
                 conn.execute("UPDATE signals SET alerted=1 WHERE id=?", (sid,))
     conn.execute(

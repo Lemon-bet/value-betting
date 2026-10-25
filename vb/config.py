@@ -60,6 +60,9 @@ class Config:
     soft_max_age_s: int = field(default_factory=lambda: int(_env("VB_SOFT_MAX_AGE_S", "21600")))
     # límite mínimo (USD) que Pinnacle acepta en esa línea; descarta líneas alternativas poco fiables. 0 = sin filtro
     ref_min_limit: float = field(default_factory=lambda: float(_env("VB_REF_MIN_LIMIT", "0")))
+    # mercados y casas que NO generan aviso (se siguen guardando datos). Backtest ago–oct: 1X2 +0,6 % (IC cruza 0), exchange −8 %
+    no_alert_market_types: list[str] = field(default_factory=lambda: _env_list("VB_NO_ALERT_MARKETS", "1x2"))
+    exchange_alerts: bool = field(default_factory=lambda: _env("VB_EXCHANGE_ALERTS", "0") == "1")
     ref_move_threshold: float = 0.03  # Pinnacle movió >3 % desde el barrido anterior → esperar
     shin_power_max_diff: float = 0.005  # discrepancia máxima entre Shin y power (puntos de probabilidad)
     min_minutes_before_kickoff: int = 5
