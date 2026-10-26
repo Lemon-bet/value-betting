@@ -247,7 +247,7 @@ def main(argv: list[str]) -> int:
                             pr = float(r2["price"])
                             pn = net_price(pr, cfg.exchange_commission) if bk2 == cfg.exchange_bookmaker else pr
                             best.setdefault((bk2, mk.get("market_type")), []).append(calc_ev(fair[o], pn))
-            print("== mejor EV observado por casa y mercado (líneas principales, todos los barridos)")
+            print("== mejor EV observado por casa y mercado (todas las líneas guardadas: principales y, si están activadas, alternativas)")
             for (bk2, mt), evs in sorted(best.items()):
                 evs.sort()
                 n = len(evs)
