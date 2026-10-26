@@ -172,7 +172,47 @@ def main(argv: list[str]) -> int:
         from .detector import detect
         from .parse import Snap, parse_ts
         markets = load_markets(conn)
+        diag = "--diag" in args
+        args = [a for a in args if a != "--diag"]
         since = args[0] if args else "2000-01-01"
+        if diag:
+            # Mejor EV por casa y tipo de mercado en cada barrido, sin umbrales (solo referencia completa y activa)
+            from .fair import ev as calc_ev, fair_probs, net_price
+            best: dict[tuple, list] = {}
+            for sw in conn.execute("SELECT id FROM sweeps WHERE started_at>=? ORDER BY id", (since,)).fetchall():
+                rows = conn.execute("SELECT * FROM snapshots WHERE sweep_id=?", (sw["id"],)).fetchall()
+                g: dict[tuple, dict] = {}
+                for r in rows:
+                    g.setdefault((r["fixture_id"], r["bookmaker"], int(r["market_id"])), {})[int(r["outcome_id"])] = r
+                for (fid, bk, mid), outs in g.items():
+                    if bk != cfg.ref_bookmaker:
+                        continue
+                    mk = markets.get(mid, {})
+                    n = mk.get("n_outcomes")
+                    if not n or len(outs) != n:
+                        continue
+                    oids = sorted(outs)
+                    fr = fair_probs([float(outs[o]["price"]) for o in oids], cfg.shin_power_max_diff)
+                    if not fr.probs:
+                        continue
+                    fair = dict(zip(oids, fr.probs))
+                    for (fid2, bk2, mid2), outs2 in g.items():
+                        if fid2 != fid or mid2 != mid or bk2 == cfg.ref_bookmaker:
+                            continue
+                        for o, r2 in outs2.items():
+                            if o not in fair or not r2["active"]:
+                                continue
+                            pr = float(r2["price"])
+                            pn = net_price(pr, cfg.exchange_commission) if bk2 == cfg.exchange_bookmaker else pr
+                            best.setdefault((bk2, mk.get("market_type")), []).append(calc_ev(fair[o], pn))
+            print("== mejor EV observado por casa y mercado (líneas principales, todos los barridos)")
+            for (bk2, mt), evs in sorted(best.items()):
+                evs.sort()
+                n = len(evs)
+                q = lambda p: evs[min(n - 1, int(p * n))]
+                print(f"  {bk2:<14} {mt:<8} n={n:>5} · máx {evs[-1]:+.1%} · p95 {q(0.95):+.1%} · p75 {q(0.75):+.1%} · "
+                      f"mediana {q(0.5):+.1%} · ≥+3 %: {sum(1 for e in evs if e >= 0.03)} · ≥+1 %: {sum(1 for e in evs if e >= 0.01)}")
+            return 0
         sweeps = conn.execute("SELECT id, started_at FROM sweeps WHERE started_at>=? ORDER BY id", (since,)).fetchall()
         seen: dict[tuple, datetime] = {}
         total = 0
