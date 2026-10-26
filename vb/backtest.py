@@ -44,6 +44,9 @@ CREATE INDEX IF NOT EXISTS ix_bt_signals_fx ON bt_signals(fixture_id);
 """
 
 
+INACTIVE_SKIPS = [0]  # contador global de comparaciones descartadas por cuota suspendida
+
+
 class Series:
     """Serie temporal ordenada de (t, price)."""
 
@@ -54,9 +57,17 @@ class Series:
         for e in entries or []:
             ts = parse_ts(e.get("createdAt"))
             if ts and e.get("price"):
-                lim.append((ts, e.get("limit")))
+                lim.append((ts, e.get("limit"), e.get("active", True) is not False))
         lim.sort(key=lambda x: x[0])
-        self.lims = [l for _, l in lim]
+        self.lims = [l for _, l, _ in lim]
+        self.acts = [a for _, _, a in lim]
+
+    def active_at(self, t: datetime) -> bool:
+        """False si la entrada vigente en t está marcada como suspendida (active=false)."""
+        i = bisect_right(self.ts, t) - 1
+        if i < 0 or i >= len(self.acts):
+            return False
+        return self.acts[i]
 
     def limit_at(self, t: datetime) -> float | None:
         i = bisect_right(self.ts, t) - 1
@@ -127,6 +138,7 @@ def simulate_fixture(cfg: Config, markets: dict[int, dict], fixture: dict, ref: 
     w_hi = start - timedelta(minutes=cfg.min_minutes_before_kickoff)
     signals: list[dict] = []
     last_sig: dict[tuple, datetime] = {}
+    n_inactive = INACTIVE_SKIPS
 
     for mid, ref_outs in ref.items():
         mk = markets.get(mid, {})
@@ -159,6 +171,8 @@ def simulate_fixture(cfg: Config, markets: dict[int, dict], fixture: dict, ref: 
                 refp = [ref_outs[o].at(t) for o in oids]
                 if any(r is None for r in refp):
                     continue
+                if cfg.bt_respect_active and not all(ref_outs[o].active_at(t) for o in oids):
+                    continue  # referencia suspendida
                 ref_age = max(int((t - r[0]).total_seconds()) for r in refp)
                 lims = [ref_outs[o].limit_at(t) for o in oids]
                 ref_limit = min(l for l in lims if l is not None) if any(l is not None for l in lims) else None
@@ -176,6 +190,9 @@ def simulate_fixture(cfg: Config, markets: dict[int, dict], fixture: dict, ref: 
                     cur = outs[o].at(t)
                     if not cur:
                         continue
+                    if cfg.bt_respect_active and not outs[o].active_at(t):
+                        n_inactive[0] += 1
+                        continue  # cuota de la casa suspendida: no se podía apostar
                     price = cur[1]
                     if not is_ex and (t - cur[0]).total_seconds() > cfg.soft_max_age_s:
                         continue
@@ -296,7 +313,8 @@ def run_backtest(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets: 
         n_sig += len(sigs)
         if i % 10 == 0:
             log.info("backtest %d/%d partidos, %d señales", i, len(todo), n_sig)
-    return {"fixtures": len(todo), "signals": n_sig}
+    log.info("backtest: comparaciones descartadas por cuota suspendida: %d", INACTIVE_SKIPS[0])
+    return {"fixtures": len(todo), "signals": n_sig, "descartes_suspendida": INACTIVE_SKIPS[0]}
 
 
 def export_csv(conn: sqlite3.Connection, path: str) -> int:

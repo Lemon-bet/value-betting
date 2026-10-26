@@ -67,6 +67,8 @@ class Config:
     exchange_alerts: bool = field(default_factory=lambda: _env("VB_EXCHANGE_ALERTS", "0") == "1")
     # Comparar también líneas alternativas de totales y hándicaps (diag 26-oct: en líneas principales EV máx +1,5 %)
     include_alt_lines: bool = field(default_factory=lambda: _env("VB_INCLUDE_ALT_LINES", "1") == "1")
+    # Backtest: ignorar cuotas marcadas active=false en el histórico (suspendidas). Antes no se miraba (26-oct).
+    bt_respect_active: bool = field(default_factory=lambda: _env("VB_BT_RESPECT_ACTIVE", "1") == "1")
     ref_move_threshold: float = 0.03  # Pinnacle movió >3 % desde el barrido anterior → esperar
     shin_power_max_diff: float = 0.005  # discrepancia máxima entre Shin y power (puntos de probabilidad)
     min_minutes_before_kickoff: int = 5
