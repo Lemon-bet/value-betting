@@ -45,6 +45,19 @@ def report(conn: sqlite3.Connection, table: str = "signals", min_n: int = 20) ->
             flag = "" if st.get("n_clv", 0) >= min_n else "  (muestra pequeña)"
             out.append(f"  {k:<22} {_fmt(st)}{flag}")
 
+    keys0 = rows[0].keys()
+    if "is_main" in keys0:
+        cut("línea (aprox.)", lambda r: {1: "principal", 0: "alternativa"}.get(r["is_main"], "?"))
+        for flag, name in ((1, "principal"), (0, "alternativa")):
+            sub = [r for r in rows if r["is_main"] == flag]
+            out.append(f"\n-- solo línea {name}: {_fmt(_stats(sub))}")
+            g2: dict[str, list] = {}
+            for r in sub:
+                g2.setdefault(f"{r['bookmaker']} · {r['market_type']}", []).append(r)
+            for k, v in sorted(g2.items(), key=lambda kv: -len(kv[1])):
+                out.append(f"     {k:<26} {_fmt(_stats(v))}")
+    elif "main_line" in keys0:
+        cut("línea", lambda r: {1: "principal", 0: "alternativa"}.get(r["main_line"], "?"))
     cut("casa", lambda r: r["bookmaker"])
     cut("mercado", lambda r: r["market_type"])
     cut("antelación (min)", lambda r: _bucket(r["minutes_to_kickoff"], [15, 30, 60, 90]))

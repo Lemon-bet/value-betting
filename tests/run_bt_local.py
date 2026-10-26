@@ -47,10 +47,10 @@ def main(db_path: str = "data/bt_local.sqlite"):
                 conn.execute(
                     """INSERT INTO bt_signals(fixture_id, tournament_id, start_time, at, minutes_to_kickoff, bookmaker, market_id,
                        market_type, handicap, outcome_id, outcome_label, price, price_net, fair_prob, fair_odds, ev, ref_price,
-                       ref_age_s, trigger, devig_method, available_min, closing_ref_price, closing_fair_odds, clv)
+                       ref_age_s, trigger, devig_method, available_min, closing_ref_price, closing_fair_odds, clv, ref_limit, soft_age_s, is_main)
                        VALUES (:fixture_id,:tournament_id,:start_time,:at,:minutes_to_kickoff,:bookmaker,:market_id,:market_type,
                        :handicap,:outcome_id,:outcome_label,:price,:price_net,:fair_prob,:fair_odds,:ev,:ref_price,:ref_age_s,
-                       :trigger,:devig_method,:available_min,:closing_ref_price,:closing_fair_odds,:clv)""", s)
+                       :trigger,:devig_method,:available_min,:closing_ref_price,:closing_fair_odds,:clv,:ref_limit,:soft_age_s,:is_main)""", s)
             conn.commit()
             total += len(sigs)
             print(f"{f['t'][:16]} {f['h']} - {f['a']}: {len(sigs)} señales")

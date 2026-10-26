@@ -46,6 +46,7 @@ class Signal:
     devig_method: str
     note: str = ""
     ref_limit: float | None = None
+    main_line: bool = True
 
 
 def _group(snaps: list[Snap]) -> dict[tuple[str, int], dict[int, Snap]]:
@@ -165,6 +166,7 @@ def detect(conn: sqlite3.Connection, cfg: Config, fixture: sqlite3.Row, snaps: l
                     ref_changed_at=ref_s.changed_at, ref_age_s=ref_s.age_s,
                     soft_changed_at=s.changed_at, soft_age_s=s.age_s,
                     minutes_to_kickoff=mins_to_ko, devig_method=fr.method, note=note, ref_limit=ref_limit,
+                    main_line=(mtype == "1x2") or bool(ref_s.main_line),
                 ))
     return signals
 
@@ -174,13 +176,13 @@ def store_signal(conn: sqlite3.Connection, cfg: Config, sig: Signal, sweep_id: i
     cur = conn.execute(
         """INSERT INTO signals(created_at, sweep_id, fixture_id, bookmaker, market_id, market_type, handicap,
              outcome_id, outcome_label, price, price_net, fair_prob, fair_odds, ev, ref_price, ref_changed_at,
-             ref_age_s, soft_changed_at, soft_age_s, minutes_to_kickoff, devig_method, status, note, ref_limit)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+             ref_age_s, soft_changed_at, soft_age_s, minutes_to_kickoff, devig_method, status, note, ref_limit, main_line)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (datetime.now(timezone.utc).isoformat(), sweep_id, sig.fixture_id, sig.bookmaker, sig.market_id,
          sig.market_type, sig.handicap, sig.outcome_id, sig.outcome_label, sig.price, sig.price_net,
          sig.fair_prob, sig.fair_odds, sig.ev, sig.ref_price, sig.ref_changed_at, sig.ref_age_s,
          sig.soft_changed_at, sig.soft_age_s, sig.minutes_to_kickoff, sig.devig_method, status, sig.note,
-         sig.ref_limit),
+         sig.ref_limit, 1 if sig.main_line else 0),
     )
     sid = int(cur.lastrowid)
     if status == "paper":

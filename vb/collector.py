@@ -116,7 +116,7 @@ def sweep(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets: dict[in
         for fx in data:
             if fx.get("fixtureId") not in wanted:
                 continue
-            all_snaps.extend(parse_fixture_odds(fx, markets, now=now))
+            all_snaps.extend(parse_fixture_odds(fx, markets, now=now, include_alt=cfg.include_alt_lines))
     # guardar
     rows = [(sweep_id, now.isoformat(), s.fixture_id, s.bookmaker, s.market_id, s.market_type, s.handicap,
              s.outcome_id, s.price, s.changed_at, s.age_s, int(s.active), int(s.market_active), int(s.main_line),

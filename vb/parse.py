@@ -51,7 +51,7 @@ def market_catalog_lookup(markets: dict[int, dict], mid: int) -> tuple[str, floa
 
 
 def parse_fixture_odds(fixture: dict, markets: dict[int, dict], now: datetime | None = None,
-                       keep_types: Iterable[str] = MAIN_MARKET_TYPES) -> list[Snap]:
+                       keep_types: Iterable[str] = MAIN_MARKET_TYPES, include_alt: bool = False) -> list[Snap]:
     """Convierte un objeto fixture (con bookmakerOdds) en filas Snap."""
     now = now or datetime.now(timezone.utc)
     keep = set(keep_types)
@@ -77,7 +77,7 @@ def parse_fixture_odds(fixture: dict, markets: dict[int, dict], now: datetime | 
                 if not p or p.get("price") in (None, 0):
                     continue
                 main = bool(p.get("mainLine"))
-                if mtype in ("totals", "spreads") and not main:
+                if mtype in ("totals", "spreads") and not main and not include_alt:
                     continue
                 ts = parse_ts(p.get("changedAt"))
                 age = int((now - ts).total_seconds()) if ts else None

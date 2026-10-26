@@ -65,6 +65,8 @@ class Config:
     # mercados y casas que NO generan aviso (se siguen guardando datos). Backtest ago–oct: 1X2 +0,6 % (IC cruza 0), exchange −8 %
     no_alert_market_types: list[str] = field(default_factory=lambda: _env_list("VB_NO_ALERT_MARKETS", "1x2"))
     exchange_alerts: bool = field(default_factory=lambda: _env("VB_EXCHANGE_ALERTS", "0") == "1")
+    # Comparar también líneas alternativas de totales y hándicaps (diag 26-oct: en líneas principales EV máx +1,5 %)
+    include_alt_lines: bool = field(default_factory=lambda: _env("VB_INCLUDE_ALT_LINES", "1") == "1")
     ref_move_threshold: float = 0.03  # Pinnacle movió >3 % desde el barrido anterior → esperar
     shin_power_max_diff: float = 0.005  # discrepancia máxima entre Shin y power (puntos de probabilidad)
     min_minutes_before_kickoff: int = 5

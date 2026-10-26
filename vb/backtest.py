@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS bt_signals (
     outcome_id INTEGER, outcome_label TEXT, price REAL, price_net REAL, fair_prob REAL, fair_odds REAL,
     ev REAL, ref_price REAL, ref_age_s INTEGER, trigger TEXT, devig_method TEXT,
     available_min REAL, closing_ref_price REAL, closing_fair_odds REAL, clv REAL,
-    ref_limit REAL, soft_age_s INTEGER
+    ref_limit REAL, soft_age_s INTEGER, is_main INTEGER
 );
 CREATE INDEX IF NOT EXISTS ix_bt_signals_fx ON bt_signals(fixture_id);
 """
@@ -100,6 +100,24 @@ def _book_series(hist: dict, bookmaker: str, markets: dict[int, dict]) -> dict[i
             if ser.pts:
                 out.setdefault(mid, {})[int(oid_s)] = ser
     return out
+
+
+def _is_main(ref: dict[int, dict[int, Series]], markets: dict[int, dict], mid: int, t: datetime) -> int:
+    """1 si `mid` es, en el instante t, la línea de Pinnacle más equilibrada de su tipo (aprox. línea principal)."""
+    mt = markets.get(mid, {}).get("market_type")
+    if mt == "1x2":
+        return 1
+    best, best_d = None, None
+    for m2, outs in ref.items():
+        if markets.get(m2, {}).get("market_type") != mt or len(outs) != 2:
+            continue
+        ps = [o.at(t) for o in outs.values()]
+        if any(p is None for p in ps):
+            continue
+        d = abs(1.0 / ps[0][1] - 1.0 / ps[1][1])
+        if best_d is None or d < best_d:
+            best, best_d = m2, d
+    return 1 if best == mid else 0
 
 
 def simulate_fixture(cfg: Config, markets: dict[int, dict], fixture: dict, ref: dict[int, dict[int, Series]],
@@ -183,6 +201,7 @@ def simulate_fixture(cfg: Config, markets: dict[int, dict], fixture: dict, ref: 
                         "price": price, "price_net": pnet, "fair_prob": fair[o], "fair_odds": 1.0 / fair[o], "ev": e,
                         "ref_price": dict(zip(oids, refp))[o][1], "ref_age_s": ref_age, "ref_limit": ref_limit,
                         "soft_age_s": int((t - cur[0]).total_seconds()),
+                        "is_main": _is_main(ref, markets, mid, t),
                         "trigger": "ref" if any(abs((t - timedelta(seconds=30) - rt).total_seconds()) < 1 for rt in ref_outs[o].ts) else "book",
                         "devig_method": fr.method, "available_min": avail,
                         "closing_ref_price": dict(zip(oids, closing))[o][1], "closing_fair_odds": cf,
@@ -266,10 +285,10 @@ def run_backtest(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets: 
             conn.execute(
                 """INSERT INTO bt_signals(fixture_id, tournament_id, start_time, at, minutes_to_kickoff, bookmaker, market_id,
                    market_type, handicap, outcome_id, outcome_label, price, price_net, fair_prob, fair_odds, ev, ref_price,
-                   ref_age_s, trigger, devig_method, available_min, closing_ref_price, closing_fair_odds, clv, ref_limit, soft_age_s)
+                   ref_age_s, trigger, devig_method, available_min, closing_ref_price, closing_fair_odds, clv, ref_limit, soft_age_s, is_main)
                    VALUES (:fixture_id,:tournament_id,:start_time,:at,:minutes_to_kickoff,:bookmaker,:market_id,:market_type,
                    :handicap,:outcome_id,:outcome_label,:price,:price_net,:fair_prob,:fair_odds,:ev,:ref_price,:ref_age_s,
-                   :trigger,:devig_method,:available_min,:closing_ref_price,:closing_fair_odds,:clv,:ref_limit,:soft_age_s)""", s)
+                   :trigger,:devig_method,:available_min,:closing_ref_price,:closing_fair_odds,:clv,:ref_limit,:soft_age_s,:is_main)""", s)
         conn.execute("INSERT OR REPLACE INTO bt_fixtures VALUES (?,?,?,?,?,?,?,?)",
                      (f["fixture_id"], f["tournament_id"], f["start_time"], f["home"], f["away"],
                       datetime.now(timezone.utc).isoformat(), len(bseries) + (1 if ref else 0), None))

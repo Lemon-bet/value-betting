@@ -44,7 +44,7 @@ def format_signal(sig, fixture, signal_id: int, stake_units: float, is_exchange:
         f"<b>{sig.bookmaker}</b> · {sig.market_type} · <b>{sig.outcome_label}</b> @ <b>{sig.price:.2f}</b>"
         + (f" (neto {sig.price_net:.2f})" if is_exchange else ""),
         f"Justa {sig.fair_odds:.2f} (ref {sig.ref_price:.2f} hace {sig.ref_age_s or 0}s · casa hace {sig.soft_age_s or 0}s)",
-        f"Stake {stake_units:g} u",
+        ("Línea principal" if getattr(sig, "main_line", True) else "Línea ALTERNATIVA") + f" · stake {stake_units:g} u",
     ]
     if sig.note:
         lines.append(f"⚠️ {sig.note}")
