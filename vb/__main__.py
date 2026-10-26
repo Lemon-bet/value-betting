@@ -165,6 +165,49 @@ def main(argv: list[str]) -> int:
                 print(f"  {m} ({len(by_month[m])} partidos) {f['startTime'][:10]} -> " + " | ".join(res))
         return 0
 
+    if cmd == "verify":
+        # Registra la cuota vista a mano en la casa para un aviso. Uso: verify ID CUOTA  (0 = no encontrada/suspendida)
+        from datetime import datetime, timezone
+        sid, vp = int(args[0]), float(args[1].replace(",", "."))
+        s = conn.execute("SELECT * FROM signals WHERE id=?", (sid,)).fetchone()
+        if not s:
+            print("aviso no encontrado")
+            return 1
+        vp_val = vp if vp > 1.0 else None
+        conn.execute("UPDATE signals SET verified_price=?, verified_at=?, clv_real=NULL WHERE id=?",
+                     (vp_val, datetime.now(timezone.utc).isoformat(), sid))
+        if vp_val and s["closing_fair_odds"]:
+            conn.execute("UPDATE signals SET clv_real=? WHERE id=?", (vp_val / s["closing_fair_odds"] - 1.0, sid))
+        conn.commit()
+        ev_real = (s["fair_prob"] * vp_val - 1.0) if vp_val else None
+        print(f"#{sid} {s['bookmaker']} {s['market_type']} {s['outcome_label']}: API {s['price']:.2f} · vista "
+              f"{(f'{vp_val:.2f}' if vp_val else 'no disponible')} · EV con la cuota vista "
+              f"{(f'{ev_real:+.1%}' if ev_real is not None else '—')}")
+        return 0
+
+    if cmd == "verified":
+        # Resumen de las verificaciones manuales por casa
+        rows = conn.execute("SELECT * FROM signals WHERE verified_at IS NOT NULL ORDER BY id").fetchall()
+        by: dict[str, list] = {}
+        for r in rows:
+            by.setdefault(r["bookmaker"], []).append(r)
+        print("== verificaciones manuales")
+        for bk, rs in by.items():
+            same = sum(1 for r in rs if r["verified_price"] and r["verified_price"] >= r["price"] - 0.011)
+            gone = sum(1 for r in rs if not r["verified_price"])
+            evr = [r["fair_prob"] * r["verified_price"] - 1.0 for r in rs if r["verified_price"]]
+            cr = [r["clv_real"] for r in rs if r["clv_real"] is not None]
+            print(f"  {bk:<14} n={len(rs):>3} · cuota igual o mejor que la API: {same} · no disponible: {gone} · "
+                  f"EV medio con cuota vista: {(sum(evr)/len(evr)):+.1%}" if evr else
+                  f"  {bk:<14} n={len(rs):>3} · no disponible: {gone}")
+            if cr:
+                print(f"  {'':<14} CLV real medio: {sum(cr)/len(cr):+.2%} (n={len(cr)})")
+        for r in rows:
+            print(f"   #{r['id']} {r['bookmaker']} {r['market_type']} {r['outcome_label']} API {r['price']:.2f} "
+                  f"vista {r['verified_price'] or '—'} CLV API {('%+.1f%%' % (100*r['clv'])) if r['clv'] is not None else '—'} "
+                  f"CLV real {('%+.1f%%' % (100*r['clv_real'])) if r['clv_real'] is not None else '—'}")
+        return 0
+
     if cmd == "replay":
         # Repite el detector actual sobre los barridos guardados (0 consultas). Uso: replay [desde YYYY-MM-DD]
         from datetime import datetime, timedelta

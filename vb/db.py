@@ -176,6 +176,10 @@ def connect(path: str) -> sqlite3.Connection:
     if "ref_limit" not in cols:
         conn.execute("ALTER TABLE signals ADD COLUMN ref_limit REAL")
         conn.commit()
+    for c, t in (("verified_price", "REAL"), ("verified_at", "TEXT"), ("clv_real", "REAL")):
+        if c not in cols:
+            conn.execute(f"ALTER TABLE signals ADD COLUMN {c} {t}")
+            conn.commit()
     if "main_line" not in cols:
         conn.execute("ALTER TABLE signals ADD COLUMN main_line INTEGER")
         conn.commit()

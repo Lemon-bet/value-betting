@@ -48,4 +48,5 @@ def format_signal(sig, fixture, signal_id: int, stake_units: float, is_exchange:
     ]
     if sig.note:
         lines.append(f"⚠️ {sig.note}")
+    lines.append(f"Verificar: <code>verify {signal_id} CUOTA</code>")
     return "\n".join(lines)

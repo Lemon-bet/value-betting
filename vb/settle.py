@@ -87,7 +87,8 @@ def fetch_closing_lines(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, ma
 
 
 def compute_clv(conn: sqlite3.Connection, cfg: Config, fixture_id: str) -> int:
-    rows = conn.execute("SELECT id, market_id, outcome_id, price_net FROM signals WHERE fixture_id=? AND clv IS NULL",
+    rows = conn.execute("SELECT id, market_id, outcome_id, price_net, verified_price FROM signals WHERE fixture_id=? "
+                        "AND (clv IS NULL OR (verified_price IS NOT NULL AND clv_real IS NULL))",
                         (fixture_id,)).fetchall()
     n = 0
     for r in rows:
@@ -98,8 +99,9 @@ def compute_clv(conn: sqlite3.Connection, cfg: Config, fixture_id: str) -> int:
         if not c or not c["fair_odds"]:
             continue
         clv = r["price_net"] / c["fair_odds"] - 1.0
-        conn.execute("UPDATE signals SET closing_ref_price=?, closing_fair_odds=?, clv=? WHERE id=?",
-                     (c["price"], c["fair_odds"], clv, r["id"]))
+        clv_real = (r["verified_price"] / c["fair_odds"] - 1.0) if r["verified_price"] else None
+        conn.execute("UPDATE signals SET closing_ref_price=?, closing_fair_odds=?, clv=?, clv_real=? WHERE id=?",
+                     (c["price"], c["fair_odds"], clv, clv_real, r["id"]))
         n += 1
     conn.commit()
     return n
