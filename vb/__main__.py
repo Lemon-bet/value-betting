@@ -165,6 +165,46 @@ def main(argv: list[str]) -> int:
                 print(f"  {m} ({len(by_month[m])} partidos) {f['startTime'][:10]} -> " + " | ".join(res))
         return 0
 
+    if cmd == "replay":
+        # Repite el detector actual sobre los barridos guardados (0 consultas). Uso: replay [desde YYYY-MM-DD]
+        from datetime import datetime, timedelta
+        from .collector import load_markets
+        from .detector import detect
+        from .parse import Snap, parse_ts
+        markets = load_markets(conn)
+        since = args[0] if args else "2000-01-01"
+        sweeps = conn.execute("SELECT id, started_at FROM sweeps WHERE started_at>=? ORDER BY id", (since,)).fetchall()
+        seen: dict[tuple, datetime] = {}
+        total = 0
+        for sw in sweeps:
+            now = parse_ts(sw["started_at"])
+            rows = conn.execute("SELECT * FROM snapshots WHERE sweep_id=?", (sw["id"],)).fetchall()
+            by_fx: dict[str, list] = {}
+            for r in rows:
+                by_fx.setdefault(r["fixture_id"], []).append(Snap(
+                    fixture_id=r["fixture_id"], bookmaker=r["bookmaker"], market_id=int(r["market_id"]),
+                    market_type=r["market_type"], handicap=r["handicap"], outcome_id=int(r["outcome_id"]),
+                    price=float(r["price"]), changed_at=r["changed_at"], age_s=r["age_s"], active=bool(r["active"]),
+                    market_active=bool(r["market_active"]), main_line=bool(r["main_line"]), stake_limit=r["stake_limit"],
+                    back_size=r["back_size"], lay_price=r["lay_price"], traded_volume=r["traded_volume"]))
+            for fid, snaps in by_fx.items():
+                fx = conn.execute("SELECT * FROM fixtures WHERE fixture_id=?", (fid,)).fetchone()
+                if not fx:
+                    continue
+                for s in detect(conn, cfg, fx, snaps, markets, sw["id"], now=now):
+                    key = (fid, s.bookmaker, s.market_id, s.outcome_id)
+                    if key in seen and now - seen[key] < timedelta(minutes=cfg.signal_dedupe_min):
+                        continue
+                    seen[key] = now
+                    total += 1
+                    aviso = "" if (s.market_type in cfg.no_alert_market_types or
+                                   (s.bookmaker == cfg.exchange_bookmaker and not cfg.exchange_alerts)) else "AVISO"
+                    print(f"{sw['started_at'][11:16]}Z {fx['home']} - {fx['away']} | {s.bookmaker} {s.market_type} "
+                          f"{s.outcome_label} @ {s.price:.2f} (justa {s.fair_odds:.2f}) EV {s.ev:+.1%} "
+                          f"casa {s.soft_age_s or 0}s ref {s.ref_age_s or 0}s {aviso} {s.note}")
+        print(f"barridos: {len(sweeps)} · señales que daría el detector actual: {total}")
+        return 0
+
     if cmd == "bt-report":
         from .report import report
         print(report(conn, "bt_signals"))
