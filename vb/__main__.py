@@ -168,7 +168,6 @@ def main(argv: list[str]) -> int:
     if cmd == "replay":
         # Repite el detector actual sobre los barridos guardados (0 consultas). Uso: replay [desde YYYY-MM-DD]
         from datetime import datetime, timedelta
-        from .collector import load_markets
         from .detector import detect
         from .parse import Snap, parse_ts
         markets = load_markets(conn)
