@@ -68,6 +68,23 @@ def report(conn: sqlite3.Connection, table: str = "signals", min_n: int = 20) ->
                 sig = {}
                 for r in rows:
                     sig[r["tournament_id"]] = sig.get(r["tournament_id"], 0) + 1
+                # distribución: ¿las señales se concentran en pocos partidos?
+                per_fx = {r[0]: r[1] for r in conn.execute("SELECT fixture_id, COUNT(*) FROM bt_signals GROUP BY fixture_id").fetchall()}
+                all_fx = [r[0] for r in conn.execute("SELECT fixture_id FROM bt_fixtures WHERE note IS NULL").fetchall()]
+                counts = sorted(per_fx.get(f, 0) for f in all_fx)
+                if counts:
+                    n = len(counts)
+                    zeros = sum(1 for c in counts if c == 0)
+                    le2 = sum(1 for c in counts if c <= 2)
+                    top = sorted(counts, reverse=True)[: max(1, n // 10)]
+                    out.append(f"\n-- distribución de señales por partido: partidos {n} · sin señal {zeros} ({zeros/n:.0%}) · "
+                               f"≤2 señales {le2/n:.0%} · mediana {counts[n//2]} · máx {counts[-1]} · "
+                               f"el 10 % de partidos con más señales acumula {sum(top)/sum(counts):.0%} del total")
+                    # por competición: partidos sin señal
+                    for f in fx:
+                        ids = [r[0] for r in conn.execute("SELECT fixture_id FROM bt_fixtures WHERE note IS NULL AND tournament_id=?", (f["tournament_id"],)).fetchall()]
+                        z = sum(1 for i in ids if per_fx.get(i, 0) == 0)
+                        out.append(f"     {names.get(f['tournament_id'], str(f['tournament_id'])):<16} sin señal {z}/{len(ids)} ({z/max(1,len(ids)):.0%})")
                 out.append("\n-- señales por partido (partidos con histórico)")
                 for f in fx:
                     n = f["n"] or 1
