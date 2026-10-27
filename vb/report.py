@@ -85,6 +85,32 @@ def report(conn: sqlite3.Connection, table: str = "signals", min_n: int = 20) ->
                         ids = [r[0] for r in conn.execute("SELECT fixture_id FROM bt_fixtures WHERE note IS NULL AND tournament_id=?", (f["tournament_id"],)).fetchall()]
                         z = sum(1 for i in ids if per_fx.get(i, 0) == 0)
                         out.append(f"     {names.get(f['tournament_id'], str(f['tournament_id'])):<16} sin señal {z}/{len(ids)} ({z/max(1,len(ids)):.0%})")
+                # medidas robustas: oportunidades distintas y CLV por partido
+                dedup: dict[tuple, dict] = {}
+                for r in rows:
+                    if r["clv"] is None:
+                        continue
+                    key = (r["fixture_id"], r["market_id"], r["outcome_id"], round(r["price"], 2), r["at"][:16])
+                    dedup.setdefault(key, r)  # paf/leovegas con misma línea, cuota y minuto = una oportunidad
+                uniq = list(dedup.values())
+                per: dict[str, list] = {}
+                for r in uniq:
+                    per.setdefault(r["fixture_id"], []).append(r["clv"])
+                means = sorted((sum(v) / len(v), k) for k, v in per.items())
+                if means:
+                    m_all = sum(m for m, _ in means) / len(means)
+                    from math import sqrt
+                    sd = sqrt(sum((m - m_all) ** 2 for m, _ in means) / max(1, len(means) - 1))
+                    se = sd / sqrt(len(means))
+                    loaded = sorted(per.items(), key=lambda kv: -len(kv[1]))[: max(1, len(per) // 10)]
+                    heavy = {k for k, _ in loaded}
+                    rest = [m for m, k in means if k not in heavy]
+                    m_rest = sum(rest) / len(rest) if rest else float("nan")
+                    out.append(f"\n-- oportunidades distintas (sin duplicado paf/leovegas): {len(uniq)} de {len([r for r in rows if r['clv'] is not None])} señales "
+                               f"· CLV medio {sum(r['clv'] for r in uniq)/len(uniq):+.2%}")
+                    out.append(f"-- CLV por partido (cada partido con señal = 1 dato): partidos {len(means)} · media {m_all:+.2%} "
+                               f"[{m_all-1.96*se:+.2%}, {m_all+1.96*se:+.2%}] · partidos con CLV>0: {sum(1 for m,_ in means if m>0)/len(means):.0%}")
+                    out.append(f"-- quitando el 10 % de partidos más cargados ({len(heavy)}): CLV por partido {m_rest:+.2%} (n={len(rest)})")
                 out.append("\n-- señales por partido (partidos con histórico)")
                 for f in fx:
                     n = f["n"] or 1

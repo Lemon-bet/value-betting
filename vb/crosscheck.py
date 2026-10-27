@@ -51,6 +51,19 @@ def run_crosscheck(api: OddsPapi, conn: sqlite3.Connection, cfg: Config, markets
             out.append(f"{f['home']}–{f['away']}: histórico no disponible ({e.code})")
             continue
         out.append(f"{f['start_time'][:16]} {f['home']}–{f['away']}: libros con histórico {sorted(k for k, v in series.items() if v)}")
+        # cobertura de líneas: mercados con histórico en la ventana que el vivo nunca vio
+        start = parse_ts(f["start_time"])
+        w_lo, w_hi = start - timedelta(minutes=cfg.window_before_min), start
+        for b in books:
+            ser_b = series.get(b) or {}
+            hist_mids = {mid for mid, outs in ser_b.items() if any(any(w_lo <= t <= w_hi for t in o.ts) or (o.at(w_lo) is not None) for o in outs.values())}
+            live_mids = {int(r[0]) for r in conn.execute("SELECT DISTINCT market_id FROM snapshots WHERE fixture_id=? AND bookmaker=?", (fid, b)).fetchall()}
+            missing = sorted(hist_mids - live_mids)
+            extra = sorted(live_mids - hist_mids)
+            lab = lambda m: f"{markets.get(m, {}).get('market_type','?')}{'' if markets.get(m, {}).get('handicap') in (None, 0) else ' ' + str(markets.get(m, {}).get('handicap'))}"
+            out.append(f"    {b:<14} líneas en histórico {len(hist_mids):>3} · en vivo {len(live_mids):>3} · "
+                       f"solo histórico {len(missing)}" + (f" (p. ej. {', '.join(lab(m) for m in missing[:6])})" if missing else "")
+                       + (f" · solo vivo {len(extra)}" if extra else ""))
         rows = conn.execute("SELECT * FROM snapshots WHERE fixture_id=? AND bookmaker IN (%s)" % ",".join("?" * len(books)),
                             (fid, *books)).fetchall()
         for r in rows:
