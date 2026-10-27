@@ -58,6 +58,23 @@ def report(conn: sqlite3.Connection, table: str = "signals", min_n: int = 20) ->
                 out.append(f"     {k:<26} {_fmt(_stats(v))}")
     elif "main_line" in keys0:
         cut("línea", lambda r: {1: "principal", 0: "alternativa"}.get(r["main_line"], "?"))
+    if "tournament_id" in rows[0].keys():
+        names = {7: "Champions", 679: "Europa League", 34480: "Conference", 8: "LaLiga", 17: "Premier",
+                 23: "Serie A", 34: "Ligue 1", 35: "Bundesliga"}
+        cut("competición", lambda r: names.get(r["tournament_id"], str(r["tournament_id"])))
+        if table == "bt_signals":
+            try:
+                fx = conn.execute("SELECT tournament_id, COUNT(*) n FROM bt_fixtures WHERE note IS NULL GROUP BY tournament_id").fetchall()
+                sig = {}
+                for r in rows:
+                    sig[r["tournament_id"]] = sig.get(r["tournament_id"], 0) + 1
+                out.append("\n-- señales por partido (partidos con histórico)")
+                for f in fx:
+                    n = f["n"] or 1
+                    out.append(f"  {names.get(f['tournament_id'], str(f['tournament_id'])):<16} partidos {f['n']:>4} · "
+                               f"señales {sig.get(f['tournament_id'], 0):>5} · por partido {sig.get(f['tournament_id'], 0)/n:.2f}")
+            except Exception as e:  # noqa: BLE001
+                out.append(f"(sin desglose de partidos: {e})")
     cut("casa", lambda r: r["bookmaker"])
     cut("mercado", lambda r: r["market_type"])
     cut("antelación (min)", lambda r: _bucket(r["minutes_to_kickoff"], [15, 30, 60, 90]))
