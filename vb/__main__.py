@@ -208,6 +208,13 @@ def main(argv: list[str]) -> int:
                   f"CLV real {('%+.1f%%' % (100*r['clv_real'])) if r['clv_real'] is not None else '—'}")
         return 0
 
+    if cmd == "crosscheck":
+        # Compara el histórico de la API con lo visto en vivo en los mismos partidos (histórico gratis)
+        cfg.validate()
+        from .crosscheck import run_crosscheck
+        print(run_crosscheck(api, conn, cfg, load_markets(conn)))
+        return 0
+
     if cmd == "replay":
         # Repite el detector actual sobre los barridos guardados (0 consultas). Uso: replay [desde YYYY-MM-DD]
         from datetime import datetime, timedelta
